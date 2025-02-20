@@ -40,7 +40,6 @@ async function run() {
         name: user.name,
         email: user.email,
         photo: user.photo,
-        role: user.role,
         timestamp: new Date(),
       });
 
