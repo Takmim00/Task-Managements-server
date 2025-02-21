@@ -16,7 +16,7 @@ const io = new Server(server, {
     methods: ["GET", "POST"],
     credentials: true,
   },
-  transports: ["websocket"]
+  transports: ["websocket"],
 });
 
 app.use(cors());
@@ -40,7 +40,7 @@ async function run() {
 
     const db = client.db("taskManagement");
     const userCollection = db.collection("users");
-    const messagesCollection = db.collection("messages"); 
+    const messagesCollection = db.collection("messages");
 
     app.post("/users", async (req, res) => {
       const user = req.body;
@@ -110,28 +110,49 @@ async function run() {
         socket.to(category).emit("receive_task", insertedTask);
       });
 
-      socket.on("delete_task", async (data) => {
-        console.log(data);
-        const { id, category } = data;
+      // socket.on("delete_task", async (data) => {
+      //   try {
+      //     const { id, category } = data;
 
-        console.log("Deleting Task ID:", id);
+      //     console.log("Deleting Task ID:", id);
 
-        if (!ObjectId.isValid(id)) {
+      //     if (!id || !ObjectId.isValid(id)) {
+      //       console.error("Invalid ObjectId format");
+      //       return;
+      //     }
+
+      //     const objectId = new ObjectId(id);
+      //     const result = await messagesCollection.deleteOne({ _id: objectId });
+
+      //     if (result.deletedCount === 1) {
+      //       io.to(category).emit("delete_task", { id });
+      //       console.log("Task deleted and emitted successfully");
+      //     } else {
+      //       console.error("Task not found");
+      //     }
+      //   } catch (error) {
+      //     console.error("Error deleting task:", error);
+      //   }
+      // });
+      socket.on("delete_task", async ({ _id, category }) => {
+        console.log("Received delete_task event from frontend:", {
+          _id,
+          category,
+        });
+
+        if (!_id || !ObjectId.isValid(_id)) {
           console.error("Invalid ObjectId format");
           return;
         }
 
-        try {
-          const objectId = new ObjectId(id);
-          const result = await messagesCollection.deleteOne({ _id: objectId });
+        const objectId = new ObjectId(_id);
+        const result = await messagesCollection.deleteOne({ _id: objectId });
 
-          if (result.deletedCount === 1) {
-            io.to(category).emit("delete_task", { id, category });
-          } else {
-            console.error("Task not found");
-          }
-        } catch (error) {
-          console.error("Error deleting task:", error);
+        if (result.deletedCount > 0) {
+          console.log("Task deleted from DB, broadcasting delete event");
+          io.to(category).emit("delete_task", { _id });
+        } else {
+          console.error("Task not found in DB");
         }
       });
     });
