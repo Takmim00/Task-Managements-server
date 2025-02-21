@@ -111,6 +111,7 @@ async function run() {
       });
 
       socket.on("delete_task", async (data) => {
+        console.log(data);
         const { id, category } = data;
 
         console.log("Deleting Task ID:", id);
