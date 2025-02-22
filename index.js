@@ -66,9 +66,10 @@ async function run() {
       res.send(result);
     });
     app.get("/tasks", async (req, res) => {
-      const result = await messagesCollection.find().toArray();
+      const result = await messagesCollection.find().sort({ order: 1 }).toArray();
       res.send(result);
     });
+    
 
     app.get("/messages/:category", async (req, res) => {
       const { category } = req.params;
@@ -106,55 +107,21 @@ async function run() {
           _id: result.insertedId,
           ...newMessage,
         };
-        // console.log(insertedTask);
         socket.to(category).emit("receive_task", insertedTask);
       });
 
-      // socket.on("delete_task", async (data) => {
-      //   try {
-      //     const { id, category } = data;
 
-      //     console.log("Deleting Task ID:", id);
-
-      //     if (!id || !ObjectId.isValid(id)) {
-      //       console.error("Invalid ObjectId format");
-      //       return;
-      //     }
-
-      //     const objectId = new ObjectId(id);
-      //     const result = await messagesCollection.deleteOne({ _id: objectId });
-
-      //     if (result.deletedCount === 1) {
-      //       io.to(category).emit("delete_task", { id });
-      //       console.log("Task deleted and emitted successfully");
-      //     } else {
-      //       console.error("Task not found");
-      //     }
-      //   } catch (error) {
-      //     console.error("Error deleting task:", error);
-      //   }
-      // });
-      socket.on("delete_task", async ({ _id, category }) => {
-        console.log("Received delete_task event from frontend:", {
-          _id,
-          category,
-        });
-
-        if (!_id || !ObjectId.isValid(_id)) {
-          console.error("Invalid ObjectId format");
-          return;
+      socket.on("reorder_tasks", async ({ category, tasks }) => {
+        for (let i = 0; i < tasks.length; i++) {
+          await messagesCollection.updateOne(
+            { _id: new ObjectId(tasks[i]._id) },
+            { $set: { order: i } }
+          );
         }
-
-        const objectId = new ObjectId(_id);
-        const result = await messagesCollection.deleteOne({ _id: objectId });
-
-        if (result.deletedCount > 0) {
-          console.log("Task deleted from DB, broadcasting delete event");
-          io.to(category).emit("delete_task", { _id });
-        } else {
-          console.error("Task not found in DB");
-        }
+        io.emit("update_tasks", { category, tasks });
       });
+    
+    
     });
     app.post("/tasks", async (req, res) => {
       try {
@@ -172,29 +139,27 @@ async function run() {
         res.status(500).json({ error: "Internal Server Error" });
       }
     });
+   
+
     app.delete("/tasks/:id", async (req, res) => {
+      const { id } = req.params;
+    
       try {
-        const id = req.params.id;
-        console.log("Deleting task with ID:", id);
-
-        if (!id || !ObjectId.isValid(id)) {
-          return res.status(400).json({ message: "Invalid ObjectId" });
+        const filter = { _id: new ObjectId(id) };
+        const result = await messagesCollection.deleteOne(filter);
+    
+        if (result.deletedCount > 0) {
+          io.emit("delete_task", id); 
+          res.send({ success: true, message: "Task deleted successfully" });
+        } else {
+          res.status(404).send({ success: false, message: "Task not found" });
         }
-
-        const result = await messagesCollection.deleteOne({
-          _id: new ObjectId(id),
-        });
-
-        if (result.deletedCount === 0) {
-          return res.status(404).json({ message: "Task not found" });
-        }
-
-        res.json({ success: true, message: "Task deleted successfully" });
       } catch (error) {
         console.error("Error deleting task:", error);
-        res.status(500).json({ message: "Error deleting task", error });
+        res.status(500).send({ success: false, message: "Internal Server Error" });
       }
     });
+    
 
     app.put("/tasks/:id", async (req, res) => {
       const id = req.params.id;
